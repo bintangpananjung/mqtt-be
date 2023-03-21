@@ -24,65 +24,70 @@ router.get("/duration", async function (req, res) {
       // min: { $minute: "$timestamp" },
       // s: { $second: "$timestamp" },
     };
-    if (req.query.filter === "second") {
-      result = await durationcollection
-        .aggregate([
-          {
-            $group: {
-              _id: {
-                ...project,
-                minute: { $minute: "$timestamp" },
-                second: { $second: "$timestamp" },
-              },
-              ...data,
-            },
+    const match = [];
+    if (req.query.start && req.query.end) {
+      const start = new Date(req.query.start);
+      let end = new Date(req.query.end);
+      if (start < end) {
+        if (new Date().toDateString() === end.toDateString()) {
+          end = new Date(Date.now());
+        }
+        match.push({
+          $match: {
+            timestamp: { $gte: start, $lte: end },
           },
-        ])
-        .toArray();
+        });
+      }
+    }
+    // console.log(match);
+
+    if (req.query.filter === "second") {
+      match.push({
+        $group: {
+          _id: {
+            ...project,
+            minute: { $minute: "$timestamp" },
+            second: { $second: "$timestamp" },
+          },
+          ...data,
+        },
+      });
+      result = await durationcollection.aggregate(match).toArray();
     }
     if (req.query.filter === "minute") {
-      result = await durationcollection
-        .aggregate([
-          {
-            $group: {
-              _id: {
-                ...project,
-                minute: { $minute: "$timestamp" },
-              },
-              ...data,
-            },
+      match.push({
+        $group: {
+          _id: {
+            ...project,
+            minute: { $minute: "$timestamp" },
           },
-        ])
-        .toArray();
+          ...data,
+        },
+      });
+      result = await durationcollection.aggregate(match).toArray();
     }
     if (req.query.filter === "hour") {
-      result = await durationcollection
-        .aggregate([
-          {
-            $group: {
-              _id: {
-                ...project,
-              },
-              ...data,
-              // timestamp: $h,
-            },
+      match.push({
+        $group: {
+          _id: {
+            ...project,
           },
-        ])
-        .toArray();
+          ...data,
+          // timestamp: $h,
+        },
+      });
+      result = await durationcollection.aggregate(match).toArray();
     }
     if (req.query.filter === "day") {
-      result = await durationcollection
-        .aggregate([
-          {
-            $group: {
-              _id: {
-                $dateToString: { format: "%Y-%m-%d", date: "$timestamp" },
-              },
-              ...data,
-            },
+      match.push({
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$timestamp" },
           },
-        ])
-        .toArray();
+          ...data,
+        },
+      });
+      result = await durationcollection.aggregate(match).toArray();
     }
   }
   res.send(result);
@@ -101,7 +106,7 @@ router.get("/dataStatus", async function (req, res) {
 router.post("/status", function (req, res) {
   try {
     // console.log(req.body);
-    client.publish("control", req.body.control);
+    client.publish("ledControl", req.body.control);
     res.send("Successfully change led status to " + req.body.control);
   } catch (error) {
     console.log(error.message);
@@ -110,7 +115,7 @@ router.post("/status", function (req, res) {
 router.post("/timer", async function (req, res) {
   try {
     // console.log(req.body);
-    client.publish("timer", req.body.timer);
+    client.publish("ledTimer", req.body.timer);
     await delay(2000);
     res.send("Successfully change timer to " + req.body.timer);
   } catch (error) {
@@ -119,8 +124,9 @@ router.post("/timer", async function (req, res) {
 });
 
 router.post("/duration", async function (req, res) {
+  // console.log(req.body.duration);
   try {
-    client.publish("duration", req.body.duration);
+    client.publish("ledDuration", req.body.duration.toString());
     // await delay(2000);
     res.send("Successfully change duration to " + req.body.duration);
   } catch (error) {
